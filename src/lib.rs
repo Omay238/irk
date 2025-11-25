@@ -19,14 +19,8 @@ impl IRCClient {
     }
 
     pub async fn connect(&mut self, nick: String, name: String) {
-        self.writer
-            .write(format!("NICK {nick}\r\n").as_bytes())
-            .await
-            .expect("failed to send nick!");
-        self.writer
-            .write(format!("USER guest 0 * :{name}\r\n").as_bytes())
-            .await
-            .expect("failed to send real name!");
+        self.send_message(format!("NICK {nick}\r\n")).await;
+        self.send_message(format!("USER guest 0 * :{name}\r\n")).await;
     }
 
     pub async fn listen(&mut self) {
@@ -38,6 +32,15 @@ impl IRCClient {
                     break;
                 }
                 Ok(n) => {
+                    let parsed = String::from_utf8_lossy(&buf[..n]);
+                    if parsed.starts_with("PING") {
+                        self.send_message(
+                            format!(
+                                "PONG {}\r\n",
+                                parsed.split(" ").last().expect("invalid ping")
+                            )
+                        ).await;
+                    }
                     print!("{}", String::from_utf8_lossy(&buf[..n]));
                 }
                 Err(e) => {
@@ -46,5 +49,12 @@ impl IRCClient {
                 }
             }
         }
+    }
+
+    async fn send_message(&mut self, content: String) {
+        self.writer
+            .write(content.as_bytes())
+            .await
+            .expect("failed to send message!");
     }
 }
