@@ -1,11 +1,14 @@
 use irk::*;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut irc = IRCClient::new(String::from(
         std::env::args()
             .nth(1)
             .unwrap_or(String::from("irc.hackclub.com:6667")),
-    ));
-    irc.connect(String::from("owomay"), String::from("owomay"));
-    irc.listen();
+    ))
+    .await;
+    irc.connect(String::from("owomay"), String::from("owomay"))
+        .await;
+    irc.listen().await;
 }
