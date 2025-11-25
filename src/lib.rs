@@ -49,8 +49,8 @@ impl IRCClient {
                             parsed.split(" ").last().expect("invalid ping")
                         ))
                         .await;
+                    } else {
                     }
-                    print!("{}", String::from_utf8_lossy(&buf[..n]));
                 }
                 Err(e) => {
                     println!("read error: {e}");
