@@ -37,7 +37,9 @@ async fn main() {
         .expect("failed to send message!");
 
     let auto_writer = writer.clone();
-    let mut stop = false;
+    let stop = Arc::new(Mutex::new(false));
+
+    let stop_clone = stop.clone();
 
     tokio::spawn(async move {
         loop {
@@ -72,11 +74,16 @@ async fn main() {
                 }
             }
         }
+        *stop_clone.lock().await = true;
     });
 
     let mut channel = String::new();
 
     loop {
+        if *stop.lock().await == true {
+            break;
+        }
+
         let mut input = String::new();
 
         std::io::stdin().read_line(&mut input).unwrap();
