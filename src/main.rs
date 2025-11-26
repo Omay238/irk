@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use tokio::io::{self, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use std::sync::Arc;
@@ -73,16 +74,62 @@ async fn main() {
         }
     });
 
+    let mut channel = String::new();
+
     loop {
         let mut input = String::new();
 
         std::io::stdin().read_line(&mut input).unwrap();
 
-        writer
-            .lock()
-            .await
-            .write(format!("{}\r\n", input.trim()).as_bytes())
-            .await
-            .expect("failed to send message!");
+        if input.starts_with("/") {
+            if input.starts_with("/join") {
+                if channel != "" {
+                    writer
+                        .lock()
+                        .await
+                        .write(format!("PART {}\r\n", channel).as_bytes())
+                        .await
+                        .expect("failed to send message!");
+                }
+                channel = String::from(input.split(" ").nth(1).unwrap().trim());
+                writer
+                    .lock()
+                    .await
+                    .write(format!("JOIN {}\r\n", channel).as_bytes())
+                    .await
+                    .expect("failed to send message!");
+            } else if input.starts_with("/part") {
+                if channel != "" {
+                    writer
+                        .lock()
+                        .await
+                        .write(format!("PART {} :{}\r\n", channel, input.chars().skip(6).collect::<String>()).as_bytes())
+                        .await
+                        .expect("failed to send message!");
+                }
+            } else if input.starts_with("/quit") {
+                writer
+                    .lock()
+                    .await
+                    .write(format!("QUIT :{}\r\n", input.chars().skip(6).collect::<String>()).as_bytes())
+                    .await
+                    .expect("failed to send message!");
+            } else if input.starts_with("/nick") {
+                writer
+                    .lock()
+                    .await
+                    .write(format!("NICK {}\r\n", input.chars().skip(6).collect::<String>()).as_bytes())
+                    .await
+                    .expect("failed to send message!");
+            }
+        } else if channel != "" {
+            println!("PRIVMSG {} :{}\r\n", channel, input.trim());
+            writer
+                .lock()
+                .await
+                .write(format!("PRIVMSG {} :{}\r\n", channel, input.trim()).as_bytes())
+                .await
+                .expect("failed to send message!");
+        }
     }
 }
