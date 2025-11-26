@@ -1,35 +1,47 @@
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::{io, net};
+use tokio::io::{self, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::net::TcpStream;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() {
-    let (mut reader, mut writer) = io::split(
-        net::TcpStream::connect(format!(
+    let stream = TcpStream::connect(format!(
             "{}:6667",
             std::env::args()
                 .nth(1)
                 .unwrap_or(String::from("irc.hackclub.com"))
         ))
         .await
-        .expect("failed to connect!"),
-    );
+        .expect("failed to connect!");
+
+    let (reader, writer) = io::split(stream);
+
+    let mut reader = Arc::new(Mutex::new(reader));
+    let mut writer = Arc::new(Mutex::new(writer));
 
     let nick = "owomay";
     let name = "owomay";
 
     writer
+        .lock()
+        .await
         .write(format!("NICK {nick}\r\n").as_bytes())
         .await
         .expect("failed to send message!");
     writer
+        .lock()
+        .await
         .write(format!("USER guest 0 * :{name}\r\n").as_bytes())
         .await
         .expect("failed to send message!");
 
+    let auto_writer = writer.clone();
+    let mut stop = false;
+
     tokio::spawn(async move {
         loop {
             let mut buf = [0u8; 512];
-            match reader.read(&mut buf).await {
+            match reader.lock().await.read(&mut buf).await {
                 Ok(0) => {
                     println!("server disconnected");
                     break;
@@ -37,7 +49,9 @@ async fn main() {
                 Ok(n) => {
                     let parsed = String::from_utf8_lossy(&buf[..n]);
                     if parsed.starts_with("PING") {
-                        writer
+                        auto_writer
+                            .lock()
+                            .await
                             .write(
                                 format!(
                                     "PONG {}\r\n",
@@ -58,5 +72,17 @@ async fn main() {
             }
         }
     });
-    loop {}
+
+    loop {
+        let mut input = String::new();
+
+        std::io::stdin().read_line(&mut input).unwrap();
+
+        writer
+            .lock()
+            .await
+            .write(format!("{}\r\n", input.trim()).as_bytes())
+            .await
+            .expect("failed to send message!");
+    }
 }
