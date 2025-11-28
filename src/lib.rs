@@ -79,12 +79,42 @@ impl IRCClient {
     }
 
     /// Take user command and send to server
-    pub async fn send_user_message(&mut self, content: String) {
-        self.send_message(format!("{}\r\n", content.trim())).await;
+    pub async fn send_user_message(&mut self, content: String, current_channel: Option<String>) {
+        if content.starts_with("/") {
+            if content.starts_with("/join") {
+                let channel = content.split(" ").nth(1).unwrap_or("").trim();
+                self.send_message(format!("JOIN {}", channel)).await;
+            } else if content.starts_with("/part") {
+                let current_channel = current_channel.unwrap_or(String::new());
+                let channel = content.split(" ").nth(1).unwrap_or(current_channel.as_str()).trim();
+                let message = content
+                    .split(" ")
+                    .skip(2)
+                    .collect::<Vec<&str>>()
+                    .join(" ")
+                    .trim()
+                    .to_string();
+                if message.is_empty() {
+                    self.send_message(format!("PART {}", channel)).await;
+                } else {
+                    self.send_message(format!("PART {} :{}", channel, message)).await;
+                }
+            } else if content.starts_with("/nick") {
+                let new_nick = content.split(" ").nth(1).unwrap_or("").trim();
+                self.send_message(format!("NICK {}", new_nick)).await;
+            }
+        } else {
+            if current_channel.is_none() {
+                return;
+            }
+            println!("PRIVMSG {} :{}", current_channel.clone().unwrap().trim(), content.trim());
+            self.send_message(format!("PRIVMSG {} :{}", current_channel.unwrap().trim(), content.trim())).await;
+        }
     }
 
     /// Helper function to easily send content to the server
     pub async fn send_message(&mut self, content: String) {
+        let content = format!("{}\r\n", content.trim());
         self.writer
             .lock()
             .await
