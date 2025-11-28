@@ -1,83 +1,37 @@
-use std::ops::Deref;
-use tokio::io::{self, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::TcpStream;
+use irk::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() {
-    let stream = TcpStream::connect(format!(
-            "{}:6667",
+    let irc = Arc::new(Mutex::new(
+        IRCClient::new(
             std::env::args()
                 .nth(1)
-                .unwrap_or(String::from("irc.hackclub.com"))
-        ))
+                .unwrap_or(String::from("irc.hackclub.com:6667")),
+        )
         .await
-        .expect("failed to connect!");
+        .expect("connection failed"),
+    ));
 
-    let (reader, writer) = io::split(stream);
-
-    let mut reader = Arc::new(Mutex::new(reader));
-    let mut writer = Arc::new(Mutex::new(writer));
-
-    let nick = "owomay";
-    let name = "owomay";
-
-    writer
-        .lock()
-        .await
-        .write(format!("NICK {nick}\r\n").as_bytes())
-        .await
-        .expect("failed to send message!");
-    writer
-        .lock()
-        .await
-        .write(format!("USER guest 0 * :{name}\r\n").as_bytes())
-        .await
-        .expect("failed to send message!");
-
-    let auto_writer = writer.clone();
     let stop = Arc::new(Mutex::new(false));
 
-    let stop_clone = stop.clone();
+    let _handle = {
+        let client = irc.clone();
+        client
+            .lock()
+            .await
+            .listen(Box::new(|msg: String| {
+                print!("{}", msg);
+            }))
+            .await
+    };
 
-    tokio::spawn(async move {
-        loop {
-            let mut buf = [0u8; 512];
-            match reader.lock().await.read(&mut buf).await {
-                Ok(0) => {
-                    println!("server disconnected");
-                    break;
-                }
-                Ok(n) => {
-                    let parsed = String::from_utf8_lossy(&buf[..n]);
-                    if parsed.starts_with("PING") {
-                        auto_writer
-                            .lock()
-                            .await
-                            .write(
-                                format!(
-                                    "PONG {}\r\n",
-                                    parsed.split(" ").last().expect("invalid ping")
-                                )
-                                .as_bytes(),
-                            )
-                            .await
-                            .expect("failed to send message!");
-                    } else {
-                        print!("{parsed}");
-                    }
-                }
-                Err(e) => {
-                    println!("read error: {e}");
-                    break;
-                }
-            }
-        }
-        *stop_clone.lock().await = true;
-    });
-
-    let mut channel = String::new();
+    irc
+        .lock()
+        .await
+        .connect(String::from("owomay"), String::from("owomay"))
+        .await;
 
     loop {
         if *stop.lock().await == true {
@@ -88,55 +42,6 @@ async fn main() {
 
         std::io::stdin().read_line(&mut input).unwrap();
 
-        if input.starts_with("/") {
-            if input.starts_with("/join") {
-                if channel != "" {
-                    writer
-                        .lock()
-                        .await
-                        .write(format!("PART {}\r\n", channel).as_bytes())
-                        .await
-                        .expect("failed to send message!");
-                }
-                channel = String::from(input.split(" ").nth(1).unwrap().trim());
-                writer
-                    .lock()
-                    .await
-                    .write(format!("JOIN {}\r\n", channel).as_bytes())
-                    .await
-                    .expect("failed to send message!");
-            } else if input.starts_with("/part") {
-                if channel != "" {
-                    writer
-                        .lock()
-                        .await
-                        .write(format!("PART {} :{}\r\n", channel, input.chars().skip(6).collect::<String>()).as_bytes())
-                        .await
-                        .expect("failed to send message!");
-                }
-            } else if input.starts_with("/quit") {
-                writer
-                    .lock()
-                    .await
-                    .write(format!("QUIT :{}\r\n", input.chars().skip(6).collect::<String>()).as_bytes())
-                    .await
-                    .expect("failed to send message!");
-            } else if input.starts_with("/nick") {
-                writer
-                    .lock()
-                    .await
-                    .write(format!("NICK {}\r\n", input.chars().skip(6).collect::<String>()).as_bytes())
-                    .await
-                    .expect("failed to send message!");
-            }
-        } else if channel != "" {
-            println!("PRIVMSG {} :{}\r\n", channel, input.trim());
-            writer
-                .lock()
-                .await
-                .write(format!("PRIVMSG {} :{}\r\n", channel, input.trim()).as_bytes())
-                .await
-                .expect("failed to send message!");
-        }
+        irc.lock().await.send_user_message(input).await;
     }
 }
