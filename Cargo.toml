@@ -2,6 +2,11 @@
 name = "libirk"
 version = "0.1.0"
 edition = "2024"
+description = "a mediocre framework for irc clients"
+documentation = "https://docs.rs/libirk"
+homepage = "https://github.com/Omay238/irk"
+repository = "https://github.com/Omay238/irk.git"
+license = "MIT"
 
 [dependencies]
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync"] }
