@@ -35,7 +35,10 @@ impl IRCClient {
     }
 
     /// Begin the listening loop
-    pub async fn listen(&mut self, callback: Box<dyn Fn(String) + Send + 'static>) -> tokio::task::JoinHandle<()> {
+    pub async fn listen(
+        &mut self,
+        callback: Box<dyn Fn(String) + Send + 'static>,
+    ) -> tokio::task::JoinHandle<()> {
         let reader = self.reader.clone();
         let writer = self.writer.clone();
 
@@ -58,7 +61,7 @@ impl IRCClient {
                                         "PONG {}\r\n",
                                         parsed.split(" ").last().expect("invalid ping")
                                     )
-                                        .as_bytes(),
+                                    .as_bytes(),
                                 )
                                 .await
                                 .expect("failed to send message!");

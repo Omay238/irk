@@ -27,8 +27,7 @@ async fn main() {
             .await
     };
 
-    irc
-        .lock()
+    irc.lock()
         .await
         .connect(String::from("owomay"), String::from("owomay"))
         .await;
