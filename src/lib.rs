@@ -107,7 +107,6 @@ impl IRCClient {
             if current_channel.is_none() {
                 return;
             }
-            println!("PRIVMSG {} :{}", current_channel.clone().unwrap().trim(), content.trim());
             self.send_message(format!("PRIVMSG {} :{}", current_channel.unwrap().trim(), content.trim())).await;
         }
     }
